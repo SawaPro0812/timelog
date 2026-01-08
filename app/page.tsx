@@ -1,14 +1,27 @@
-import Link from "next/link";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../lib/supabaseClient";
+import { Card, Msg, Page, Title } from "../components/ui/ui";
 
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) router.replace("/presets");
+      else router.replace("/login");
+    })();
+  }, [router]);
+
   return (
-    <main style={{ padding: 24 }}>
-      <h1>TimeLog</h1>
-      <ul>
-        <li><Link href="/login">Login</Link></li>
-        <li><Link href="/presets">Presets</Link></li>
-        <li><Link href="/sessions">履歴</Link></li>
-      </ul>
-    </main>
+    <Page>
+      <Card>
+        <Title size={22}>TimeLog</Title>
+        <Msg>移動中...</Msg>
+      </Card>
+    </Page>
   );
 }

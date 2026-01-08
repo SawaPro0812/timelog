@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
-import { Button, Card, Hr, Input, Label, Msg, Page, Row, Select, Sub, Title } from "../../components/ui/ui";
+import { Button, Card, Hr, Input, Label, Msg, Page, Select } from "../../components/ui/ui";
+import AppHeader from "../../components/ui/AppHeader";
 
 type Preset = {
   id: string;
@@ -14,6 +14,10 @@ type Preset = {
   rest_seconds: number;
   created_at: string;
 };
+
+function digitsOnly(s: string) {
+  return s.replace(/[^\d]/g, "");
+}
 
 export default function PresetsPage() {
   const router = useRouter();
@@ -27,10 +31,10 @@ export default function PresetsPage() {
   // form
   const [name, setName] = useState("マイプリセット");
   const [workMode, setWorkMode] = useState<"timed" | "manual">("timed");
-  const [workSeconds, setWorkSeconds] = useState(30);
-  const [restSeconds, setRestSeconds] = useState(30);
+  const [workSeconds, setWorkSeconds] = useState("30");
+  const [restSeconds, setRestSeconds] = useState("30");
 
-  const isHIIT = useMemo(() => workMode === "timed", [workMode]);
+  const isInterval = useMemo(() => workMode === "timed", [workMode]);
 
   useEffect(() => {
     (async () => {
@@ -65,16 +69,20 @@ export default function PresetsPage() {
     if (!userId) return;
     setMsg("");
 
-    if (!name.trim()) return setMsg("プリセット名を入力してください。");
-    if (restSeconds <= 0) return setMsg("休憩秒数は1以上にしてください。");
-    if (workMode === "timed" && workSeconds <= 0) return setMsg("トレ秒数は1以上にしてください（HIIT）。");
+    const nm = name.trim();
+    const rest = Number(restSeconds || "0");
+    const work = Number(workSeconds || "0");
+
+    if (!nm) return setMsg("プリセット名を入力してください。");
+    if (rest <= 0) return setMsg("休憩秒数は1以上にしてください。");
+    if (workMode === "timed" && work <= 0) return setMsg("トレ秒数は1以上にしてください。");
 
     const payload = {
       user_id: userId,
-      name: name.trim(),
+      name: nm,
       work_mode: workMode,
-      work_seconds: workMode === "timed" ? workSeconds : null,
-      rest_seconds: restSeconds,
+      work_seconds: workMode === "timed" ? work : null,
+      rest_seconds: rest,
     };
 
     const { error } = await supabase.from("presets").insert(payload);
@@ -94,110 +102,117 @@ export default function PresetsPage() {
   return (
     <Page>
       <Card>
-        <Row>
-          <div style={{ flex: 1 }}>
-            <Title>プリセット</Title>
-            <Sub>HIIT（トレ＋休憩） / ウェイト（休憩のみ・セット無制限）</Sub>
-          </div>
-          <Link href="/" style={{ color: "#cfe0ff", textDecoration: "none", opacity: 0.9 }}>
-            ホーム
-          </Link>
-        </Row>
+        <AppHeader title="プリセット" />
 
-        <Hr />
 
         {loading ? (
           <Msg>読み込み中...</Msg>
         ) : (
           <>
-            {/* Create */}
-            <Label>プリセット名</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(0,0,0,0.18)",
+              }}
+            >
+              <Label>プリセット名</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
 
-            <Row>
-              <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ marginTop: 10 }}>
                 <Label>モード</Label>
-                <Select value={workMode} onChange={(e) => setWorkMode(e.target.value as any)}>
-                  <option value="timed">HIIT（トレ時間あり）</option>
-                  <option value="manual">ウェイト（休憩のみ）</option>
-                </Select>
               </div>
+              <Select value={workMode} onChange={(e) => setWorkMode(e.target.value as any)}>
+                <option value="timed">インターバル（トレ+休憩）</option>
+                <option value="manual">休憩のみ（セット無制限）</option>
+              </Select>
 
-              {isHIIT && (
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <Label>トレ（秒）</Label>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  gridTemplateColumns: isInterval ? "1fr 1fr" : "1fr",
+                  marginTop: 10,
+                }}
+              >
+                {isInterval && (
+                  <div>
+                    <Label>トレ（秒）</Label>
+                    <Input
+                      value={workSeconds}
+                      onChange={(e) => setWorkSeconds(digitsOnly(e.target.value))}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="30"
+                      onBlur={() => {
+                        if (workMode === "timed" && workSeconds === "") setWorkSeconds("30");
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <Label>休憩（秒）</Label>
                   <Input
-                    type="number"
-                    value={workSeconds}
-                    onChange={(e) => setWorkSeconds(Number(e.target.value))}
-                    min={1}
+                    value={restSeconds}
+                    onChange={(e) => setRestSeconds(digitsOnly(e.target.value))}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="30"
+                    onBlur={() => {
+                      if (restSeconds === "") setRestSeconds("30");
+                    }}
                   />
                 </div>
-              )}
-
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <Label>休憩（秒）</Label>
-                <Input
-                  type="number"
-                  value={restSeconds}
-                  onChange={(e) => setRestSeconds(Number(e.target.value))}
-                  min={1}
-                />
               </div>
-            </Row>
 
-            <Row>
-              <Button onClick={createPreset} style={{ flex: 1 }}>
-                作成
-              </Button>
-              <Button variant="ghost" onClick={refresh} style={{ flex: 1 }}>
-                再読み込み
-              </Button>
-            </Row>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+                <Button onClick={createPreset}>作成</Button>
+                <Button variant="ghost" onClick={refresh}>
+                  再読み込み
+                </Button>
+              </div>
 
-            {msg && <Msg>{msg}</Msg>}
+              {msg && <Msg>{msg}</Msg>}
+            </div>
 
             <Hr />
 
-            {/* List */}
             {items.length === 0 ? (
               <Msg>まだプリセットがありません。上で作成してください。</Msg>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                {items.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      background: "rgba(0,0,0,0.18)",
-                    }}
-                  >
-                    <Row>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 800 }}>{p.name}</div>
-                        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
-                          {p.work_mode === "timed"
-                            ? `HIIT：トレ ${p.work_seconds}s / 休憩 ${p.rest_seconds}s`
-                            : `ウェイト：休憩 ${p.rest_seconds}s（トレ時間は計測しない）`}
-                        </div>
+                {items.map((p) => {
+                  const modeText =
+                    p.work_mode === "timed"
+                      ? `インターバル：トレ ${p.work_seconds}s / 休憩 ${p.rest_seconds}s`
+                      : `休憩のみ：休憩 ${p.rest_seconds}s（セット無制限）`;
+
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        padding: 12,
+                        borderRadius: 14,
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "rgba(0,0,0,0.18)",
+                      }}
+                    >
+                      <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
+                      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{modeText}</div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+                        <Button variant="ghost" onClick={() => router.push(`/timer/${p.id}`)}>
+                          開始
+                        </Button>
+                        <Button variant="danger" onClick={() => deletePreset(p.id)}>
+                          削除
+                        </Button>
                       </div>
-
-                      <Button
-                        variant="ghost"
-                        onClick={() => router.push(`/timer/${p.id}`)}
-                        style={{ minWidth: 120 }}
-                      >
-                        開始
-                      </Button>
-
-                      <Button variant="danger" onClick={() => deletePreset(p.id)} style={{ minWidth: 120 }}>
-                        削除
-                      </Button>
-                    </Row>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>

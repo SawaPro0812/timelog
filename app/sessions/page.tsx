@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
-import { Button, Card, Hr, Msg, Page, Row, Sub, Title } from "../../components/ui/ui";
+import { Button, Card, Hr, Msg, Page } from "../../components/ui/ui";
+import AppHeader from "../../components/ui/AppHeader";
 
 type SessionRow = {
   id: string;
@@ -28,7 +28,6 @@ function fmt(sec: number) {
 }
 function dt(iso: string) {
   const d = new Date(iso);
-  // 日本向けにざっくり
   return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(
     d.getMinutes()
   )}`;
@@ -45,7 +44,6 @@ export default function SessionsPage() {
     setMsg("");
     setLoading(true);
 
-    // presets を joinして name を取る（Foreign key: sessions.preset_id -> presets.id）
     const { data, error } = await supabase
       .from("sessions")
       .select(
@@ -88,100 +86,77 @@ export default function SessionsPage() {
   return (
     <Page>
       <Card>
-        <Row>
-          <div style={{ flex: 1 }}>
-            <Title>履歴</Title>
-            <Sub>直近{totalCount}件（最大50件）</Sub>
-          </div>
-          <Link href="/" style={{ color: "#cfe0ff", textDecoration: "none", opacity: 0.9 }}>
-            ホーム
-          </Link>
-        </Row>
-
-        <Hr />
-
-        <Row>
-          <Button onClick={refresh} variant="ghost" style={{ flex: 1 }}>
-            再読み込み
-          </Button>
-          <Link
-            href="/presets"
-            style={{
-              flex: 1,
-              textAlign: "center",
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.18)",
-              color: "#e8eefc",
-              textDecoration: "none",
-              fontWeight: 700,
-            }}
-          >
-            プリセットへ
-          </Link>
-        </Row>
+        <AppHeader title="履歴" />
 
         {msg && <Msg>{msg}</Msg>}
-
-        <Hr />
 
         {loading ? (
           <Msg>読み込み中...</Msg>
         ) : items.length === 0 ? (
           <Msg>まだ履歴がありません。タイマーを回して「終了して保存」してください。</Msg>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
-            {items.map((s) => {
-              const name = s.presets?.name ?? "（削除済みプリセット）";
-              const duration = s.ended_at
-                ? Math.max(0, Math.floor((new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 1000))
-                : null;
+          <>
+            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 10 }}>直近{totalCount}件（最大50件）</div>
 
-              return (
-                <div
-                  key={s.id}
-                  style={{
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    background: "rgba(0,0,0,0.18)",
-                  }}
-                >
-                  <div style={{ fontWeight: 800 }}>{name}</div>
-                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                    開始: {dt(s.started_at)}
-                    {s.ended_at ? ` / 終了: ${dt(s.ended_at)}` : " / 終了: （未終了）"}
-                  </div>
+            <div style={{ display: "grid", gap: 10 }}>
+              {items.map((s) => {
+                const name = s.presets?.name ?? "（削除済みプリセット）";
+                const duration = s.ended_at
+                  ? Math.max(0, Math.floor((new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 1000))
+                  : null;
 
-                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                    セット: <b>{s.sets_completed}</b> ／ 休憩合計: <b>{fmt(s.total_rest_seconds)}</b> ／ トレ合計:{" "}
-                    <b>{fmt(s.total_work_seconds)}</b>
-                    {duration !== null && (
-                      <>
-                        {" "}
-                        ／ 経過: <b>{fmt(duration)}</b>
-                      </>
-                    )}
-                  </div>
+                return (
+                  <div
+                    key={s.id}
+                    style={{
+                      padding: 12,
+                      borderRadius: 14,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(0,0,0,0.18)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 900, fontSize: 16 }}>{name}</div>
+                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+                      開始: {dt(s.started_at)}
+                      {s.ended_at ? ` / 終了: ${dt(s.ended_at)}` : " / 終了: （未終了）"}
+                    </div>
 
-                  <Row>
-                    {s.preset_id && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => router.push(`/timer/${s.preset_id}`)}
-                        style={{ flex: 1 }}
-                      >
-                        このプリセットで開始
+                    <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8 }}>
+                      セット: <b>{s.sets_completed}</b> ／ 休憩合計: <b>{fmt(s.total_rest_seconds)}</b> ／ トレ合計:{" "}
+                      <b>{fmt(s.total_work_seconds)}</b>
+                      {duration !== null && (
+                        <>
+                          {" "}
+                          ／ 経過: <b>{fmt(duration)}</b>
+                        </>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: s.preset_id ? "1fr 1fr" : "1fr",
+                        gap: 10,
+                        marginTop: 12,
+                      }}
+                    >
+                      {s.preset_id && (
+                        <Button variant="ghost" onClick={() => router.push(`/timer/${s.preset_id}`)}>
+                          同じプリセットで開始
+                        </Button>
+                      )}
+                      <Button variant="danger" onClick={() => deleteSession(s.id)}>
+                        削除
                       </Button>
-                    )}
-                    <Button variant="danger" onClick={() => deleteSession(s.id)} style={{ flex: 1 }}>
-                      履歴を削除
-                    </Button>
-                  </Row>
-                </div>
-              );
-            })}
-          </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Hr />
+            <Msg>※ データが増えたらページ再読み込みでOK</Msg>
+          </>
         )}
       </Card>
     </Page>

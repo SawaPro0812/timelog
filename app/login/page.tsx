@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
-import { Button, Card, Input, Label, Msg, Page, Row, Sub, Title, Hr } from "../../components/ui/ui";
+import { Button, Card, Input, Label, Msg, Page, Sub, Title, Hr } from "../../components/ui/ui";
 
 type Mode = "login" | "signup";
 
@@ -58,7 +58,6 @@ export default function LoginPage() {
         return;
       }
 
-      // signup
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -70,8 +69,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Supabase設定によっては確認メールが必要
-      setMsg("新規登録を受け付けました。確認メールが届く設定の場合は、メール内リンクを開いてからログインしてください。");
+      setMsg("新規登録を受け付けました。確認メールが必要な場合は、メール内リンクを開いてからログインしてください。");
       setMode("login");
       setBusy(false);
     } catch (e: any) {
@@ -96,9 +94,9 @@ export default function LoginPage() {
         width: "100%",
         minHeight: 44,
         borderRadius: 999,
-        border: "1px solid rgba(255,255,255,0.14)",
-        background: active ? "rgba(120,160,255,0.95)" : "rgba(255,255,255,0.08)",
-        color: active ? "#0b1020" : "#e8eefc",
+        border: active ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(255,255,255,0.12)",
+        background: active ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
+        color: "#e8eefc",
         fontWeight: 900,
         fontSize: 14,
         cursor: "pointer",
@@ -120,15 +118,8 @@ export default function LoginPage() {
           <Msg>読み込み中...</Msg>
         ) : (
           <>
-            {/* タブ */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-                marginBottom: 14,
-              }}
-            >
+            {/* タブ（青じゃなくグレー系） */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <SegBtn active={mode === "login"} onClick={() => setMode("login")}>
                 ログイン
               </SegBtn>
@@ -137,7 +128,6 @@ export default function LoginPage() {
               </SegBtn>
             </div>
 
-            {/* フォーム */}
             <div style={{ display: "grid", gap: 12 }}>
               <div>
                 <Label>メールアドレス</Label>
@@ -164,6 +154,7 @@ export default function LoginPage() {
                 />
               </div>
 
+              {/* ここは青ボタン（メイン行動） */}
               <Button onClick={onSubmit} disabled={busy}>
                 {mode === "login" ? "ログイン" : "新規登録"}
               </Button>

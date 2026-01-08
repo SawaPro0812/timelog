@@ -33,10 +33,8 @@ export default function TimerPage() {
   const [preset, setPreset] = useState<Preset | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // ✅ UIメッセージ
   const [msg, setMsg] = useState("");
 
-  // run state（DBには保存しない。保存は「保存して終了」だけ）
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const startedAtRef = useRef<Date | null>(null);
 
@@ -112,7 +110,6 @@ export default function TimerPage() {
     const current = phaseRef.current;
 
     if (current === "work") {
-      // work終了 → work加算 → restへ
       setTotalWork((v) => v + workSec);
       setPhase("rest");
       setRemain(restSec);
@@ -122,7 +119,6 @@ export default function TimerPage() {
     }
 
     if (current === "rest") {
-      // rest終了 → rest加算＆セット+1
       setTotalRest((v) => v + restSec);
       setSets((v) => v + 1);
 
@@ -135,13 +131,11 @@ export default function TimerPage() {
         setPhase("idle");
         setRemain(0);
         stopTick();
-        // manualは「待機」なので、ここではメッセージ無しでOK
       }
       return;
     }
   };
 
-  // load user & preset
   useEffect(() => {
     (async () => {
       setMsg("");
@@ -185,8 +179,6 @@ export default function TimerPage() {
       setRemain(workSec);
       startTick();
       setMsg("開始しました");
-      // 最初のフェーズもそれっぽく出すなら↓でもOK
-      // announcePhaseStart("work");
     } else {
       setPhase("idle");
       setRemain(0);
@@ -210,9 +202,7 @@ export default function TimerPage() {
   };
 
   const pause = () => {
-    // ✅ 未開始なら何も出さない
     if (!startedAtRef.current) return;
-    // ✅ フェーズが動いてないなら何も出さない（idle時に押しても無音）
     if (!(phaseRef.current === "work" || phaseRef.current === "rest")) return;
 
     stopTick();
@@ -220,9 +210,7 @@ export default function TimerPage() {
   };
 
   const resume = () => {
-    // ✅ 未開始なら何も出さない
     if (!startedAtRef.current) return;
-    // ✅ フェーズが動いてないなら何も出さない
     if (!(phaseRef.current === "work" || phaseRef.current === "rest")) return;
 
     startTick();
@@ -242,17 +230,9 @@ export default function TimerPage() {
   };
 
   const skip = () => {
-    // ✅ 未開始なら何も出さない
     if (!startedAtRef.current) return;
-
-    // 次へ = 次フェーズ開始を分かるメッセージにする
-    const current = phaseRef.current;
-    const next = current === "work" ? "rest" : current === "rest" ? "work" : "work";
     stopTick();
     onPhaseFinished();
-    // onPhaseFinished内でもannounceしてるけど、
-    // ユーザー操作の「次へ」っぽさを強めたいならここで上書きしてもOK：
-    // announcePhaseStart(next);
   };
 
   const saveAndExit = async () => {
@@ -288,7 +268,6 @@ export default function TimerPage() {
     }
 
     setMsg("保存しました");
-    // ちょい待たせたいならsetTimeoutで遷移でもOKだけど、今回は即遷移で
     router.push("/sessions");
   };
 
@@ -328,8 +307,27 @@ export default function TimerPage() {
                 {phase === "work" || phase === "rest" ? fmt(remain) : "--:--"}
               </div>
 
-              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8 }}>
-                セット: <b>{sets}</b> ／ 休憩合計: <b>{fmt(totalRest)}</b> ／ トレ合計: <b>{fmt(totalWork)}</b>
+              {/* ✅ ここが改行の主犯なので、nowrapの塊でwrapさせる */}
+              <div
+                style={{
+                  fontSize: 12,
+                  opacity: 0.9,
+                  marginTop: 10,
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ whiteSpace: "nowrap" }}>
+                  セット: <b>{sets}</b>
+                </span>
+                <span style={{ whiteSpace: "nowrap" }}>
+                  休憩合計: <b>{fmt(totalRest)}</b>
+                </span>
+                <span style={{ whiteSpace: "nowrap" }}>
+                  トレ合計: <b>{fmt(totalWork)}</b>
+                </span>
               </div>
 
               <div style={{ fontSize: 12, opacity: 0.7, marginTop: 10 }}>
@@ -370,7 +368,7 @@ export default function TimerPage() {
               </Button>
             </div>
 
-            {/* ✅ メッセージ領域は常に確保（高さ固定） */}
+            {/* メッセージ領域は常に固定（ズレない） */}
             <div style={{ minHeight: 54, marginTop: 10 }}>
               {msg ? (
                 <>

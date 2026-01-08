@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
-import { Button, Card, Hr, Input, Label, Msg, Page, Select } from "../../components/ui/ui";
+import { Button, Card, Hr, Input, Label, Msg, Page, Select, Sub, Title } from "../../components/ui/ui";
 import AppHeader from "../../components/ui/AppHeader";
 
 type Preset = {
@@ -15,9 +15,10 @@ type Preset = {
   created_at: string;
 };
 
-function digitsOnly(s: string) {
-  return s.replace(/[^\d]/g, "");
-}
+const DEFAULT_NAME = "マイプリセット";
+const DEFAULT_MODE: "timed" | "manual" = "timed";
+const DEFAULT_WORK = "30";
+const DEFAULT_REST = "30";
 
 export default function PresetsPage() {
   const router = useRouter();
@@ -29,10 +30,10 @@ export default function PresetsPage() {
   const [msg, setMsg] = useState("");
 
   // form
-  const [name, setName] = useState("マイプリセット");
-  const [workMode, setWorkMode] = useState<"timed" | "manual">("timed");
-  const [workSeconds, setWorkSeconds] = useState("30");
-  const [restSeconds, setRestSeconds] = useState("30");
+  const [name, setName] = useState(DEFAULT_NAME);
+  const [workMode, setWorkMode] = useState<"timed" | "manual">(DEFAULT_MODE);
+  const [workSeconds, setWorkSeconds] = useState(DEFAULT_WORK);
+  const [restSeconds, setRestSeconds] = useState(DEFAULT_REST);
 
   const isInterval = useMemo(() => workMode === "timed", [workMode]);
 
@@ -65,21 +66,34 @@ export default function PresetsPage() {
     setItems((data ?? []) as Preset[]);
   };
 
+  const resetForm = () => {
+    setMsg("");
+    setName(DEFAULT_NAME);
+    setWorkMode(DEFAULT_MODE);
+    setWorkSeconds(DEFAULT_WORK);
+    setRestSeconds(DEFAULT_REST);
+    setMsg("リセットしました");
+  };
+
+  const toInt = (s: string) => {
+    const n = parseInt(s || "0", 10);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const createPreset = async () => {
     if (!userId) return;
     setMsg("");
 
-    const nm = name.trim();
-    const rest = Number(restSeconds || "0");
-    const work = Number(workSeconds || "0");
+    const rest = toInt(restSeconds);
+    const work = toInt(workSeconds);
 
-    if (!nm) return setMsg("プリセット名を入力してください。");
+    if (!name.trim()) return setMsg("プリセット名を入力してください。");
     if (rest <= 0) return setMsg("休憩秒数は1以上にしてください。");
     if (workMode === "timed" && work <= 0) return setMsg("トレ秒数は1以上にしてください。");
 
     const payload = {
       user_id: userId,
-      name: nm,
+      name: name.trim(),
       work_mode: workMode,
       work_seconds: workMode === "timed" ? work : null,
       rest_seconds: rest,
@@ -104,11 +118,11 @@ export default function PresetsPage() {
       <Card>
         <AppHeader title="プリセット" />
 
-
         {loading ? (
           <Msg>読み込み中...</Msg>
         ) : (
           <>
+            {/* --- Create form --- */}
             <div
               style={{
                 padding: 12,
@@ -141,13 +155,10 @@ export default function PresetsPage() {
                     <Label>トレ（秒）</Label>
                     <Input
                       value={workSeconds}
-                      onChange={(e) => setWorkSeconds(digitsOnly(e.target.value))}
+                      onChange={(e) => setWorkSeconds(e.target.value.replace(/[^\d]/g, ""))}
                       inputMode="numeric"
                       pattern="[0-9]*"
                       placeholder="30"
-                      onBlur={() => {
-                        if (workMode === "timed" && workSeconds === "") setWorkSeconds("30");
-                      }}
                     />
                   </div>
                 )}
@@ -156,29 +167,29 @@ export default function PresetsPage() {
                   <Label>休憩（秒）</Label>
                   <Input
                     value={restSeconds}
-                    onChange={(e) => setRestSeconds(digitsOnly(e.target.value))}
+                    onChange={(e) => setRestSeconds(e.target.value.replace(/[^\d]/g, ""))}
                     inputMode="numeric"
                     pattern="[0-9]*"
                     placeholder="30"
-                    onBlur={() => {
-                      if (restSeconds === "") setRestSeconds("30");
-                    }}
                   />
                 </div>
               </div>
 
+              {/* ボタンは均等配置：作成 / リセット */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
                 <Button onClick={createPreset}>作成</Button>
-                <Button variant="ghost" onClick={refresh}>
-                  再読み込み
+                <Button variant="ghost" onClick={resetForm}>
+                  リセット
                 </Button>
               </div>
 
+              {/* メッセージ（高さズレは許容でOKならそのまま） */}
               {msg && <Msg>{msg}</Msg>}
             </div>
 
             <Hr />
 
+            {/* --- List --- */}
             {items.length === 0 ? (
               <Msg>まだプリセットがありません。上で作成してください。</Msg>
             ) : (
@@ -199,8 +210,12 @@ export default function PresetsPage() {
                         background: "rgba(0,0,0,0.18)",
                       }}
                     >
-                      <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
-                      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{modeText}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
+                          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{modeText}</div>
+                        </div>
+                      </div>
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
                         <Button variant="ghost" onClick={() => router.push(`/timer/${p.id}`)}>

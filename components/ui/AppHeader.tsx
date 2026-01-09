@@ -163,7 +163,7 @@ export default function AppHeader({ title }: Props) {
           marginBottom: 12,
         }}
       >
-        <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 0.5 }}>{title}</div>
+        <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 0.5 }}>{title}</div>
 
         <button
           type="button"

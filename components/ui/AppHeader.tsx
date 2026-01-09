@@ -1,36 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { Title } from "./ui";
 
-function IconMenuIOS() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 7h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M6 12h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M6 17h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
+type Props = { title: string };
 
-function IconClose() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6.5 6.5l11 11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M17.5 6.5l-11 11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-export default function AppHeader({ title }: { title: string }) {
-  const router = useRouter();
+export default function AppHeader({ title }: Props) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
 
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Portal用：CSRでのみbodyを使う
+  useEffect(() => setMounted(true), []);
+
+  // ESCで閉じる
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -39,15 +27,25 @@ export default function AppHeader({ title }: { title: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // 画面遷移したら閉じる
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // ✅ 開いている間は背景スクロールをロック（html + body）
   useEffect(() => {
     if (!open) return;
 
-    const onClick = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (panelRef.current && !panelRef.current.contains(t)) setOpen(false);
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
     };
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
   }, [open]);
 
   const logout = async () => {
@@ -55,122 +53,145 @@ export default function AppHeader({ title }: { title: string }) {
     router.replace("/login");
   };
 
-  const NavLink = ({ href, label }: { href: string; label: string }) => {
-    const active = pathname === href;
-    return (
-      <Link
-        href={href}
-        onClick={() => setOpen(false)}
+  const MenuItem = ({ href, label, active }: { href: string; label: string; active: boolean }) => (
+    <Link
+      href={href}
+      onClick={() => setOpen(false)}
+      style={{
+        display: "block",
+        padding: "16px 16px",
+        borderRadius: 14,
+        border: active ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(255,255,255,0.12)",
+        background: active ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
+        color: "#e8eefc",
+        fontWeight: 900,
+        textDecoration: "none",
+      }}
+    >
+      {label}
+    </Link>
+  );
+
+  const overlay = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) setOpen(false);
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 999999,
+
+        display: "grid",
+        placeItems: "center",
+
+        padding: "max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
+
+        width: "100vw",
+        height: "100dvh",
+
+        background: "rgba(0,0,0,0.55)",
+        backdropFilter: "blur(10px)",
+      }}
+    >
+      <div
         style={{
-          display: "block",
-          width: "100%",
-          padding: "12px 12px",
-          borderRadius: 14,
-          textDecoration: "none",
-          textAlign: "left",
-          color: active ? "#e8eefc" : "rgba(232,238,252,0.88)",
-          background: active ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          fontWeight: 850,
+          width: "min(420px, 100%)",
+          margin: "0 auto",
+          borderRadius: 18,
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: "rgba(10,14,22,0.92)",
+          padding: 14,
+          boxShadow: "0 16px 50px rgba(0,0,0,0.45)",
         }}
       >
-        {label}
-      </Link>
-    );
-  };
+        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>メニュー</div>
+
+        <div style={{ display: "grid", gap: 10 }}>
+          <MenuItem href="/presets" label="プリセット" active={pathname === "/presets"} />
+          <MenuItem href="/sessions" label="履歴" active={pathname === "/sessions"} />
+
+          <button
+            type="button"
+            onClick={logout}
+            style={{
+              width: "100%",
+              padding: "16px 16px",
+              borderRadius: 14,
+              border: "1px solid rgba(255,80,80,0.35)",
+              background: "rgba(255,80,80,0.06)",
+              color: "#ffd6d6",
+              fontWeight: 900,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            ログアウト
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            style={{
+              width: "100%",
+              padding: "14px 16px",
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.05)",
+              color: "#e8eefc",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div>
-      {/* タイトル + メニューボタン */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <Title size={28}>{title}</Title>
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 0.5 }}>{title}</div>
 
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="メニュー"
+          onClick={() => setOpen(true)}
+          aria-label="menu"
           style={{
-            height: 44,
-            padding: "0 14px",
-            borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.16)",
-            background: "rgba(255,255,255,0.08)",
-            color: "#e8eefc",
             display: "inline-flex",
             alignItems: "center",
             gap: 10,
+            padding: "10px 14px",
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: "rgba(255,255,255,0.06)",
+            color: "#e8eefc",
+            fontWeight: 900,
             cursor: "pointer",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.25)",
-            backdropFilter: "blur(10px)",
+            userSelect: "none",
+            whiteSpace: "nowrap",
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.85, letterSpacing: 0.5 }}>MENU</span>
-          <span style={{ display: "grid", placeItems: "center" }}>{open ? <IconClose /> : <IconMenuIOS />}</span>
+          MENU
+          <span style={{ opacity: 0.9, fontSize: 18, lineHeight: 1 }}>≡</span>
         </button>
       </div>
 
-      {/* 余白＋区切り */}
-      <div
-        style={{
-          height: 1,
-          background: "rgba(255,255,255,0.12)",
-          marginTop: 12,
-          marginBottom: 14,
-        }}
-      />
+      <div style={{ height: 1, background: "rgba(255,255,255,0.08)", marginBottom: 14 }} />
 
-      {/* ドロワー */}
-      {open && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            zIndex: 50,
-          }}
-        >
-          <div
-            ref={panelRef}
-            style={{
-              position: "absolute",
-              top: 14,
-              right: 14,
-              width: "min(340px, calc(100vw - 28px))",
-              borderRadius: 18,
-              padding: 12,
-              background: "rgba(15,18,28,0.96)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
-              backdropFilter: "blur(12px)",
-            }}
-          >
-            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 10 }}>メニュー</div>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <NavLink href="/presets" label="プリセット" />
-              <NavLink href="/sessions" label="履歴" />
-
-              <button
-                type="button"
-                onClick={logout}
-                style={{
-                  width: "100%",
-                  padding: "12px 12px",
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,99,99,0.45)",
-                  background: "rgba(255,99,99,0.08)",
-                  color: "#ffd0d0",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                ログアウト
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      {open && mounted && createPortal(overlay, document.body)}
+    </>
   );
 }

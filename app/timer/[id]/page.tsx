@@ -45,11 +45,23 @@ export default function TimerPage() {
   const [totalRest, setTotalRest] = useState(0);
   const [totalWork, setTotalWork] = useState(0);
 
+  const [paused, setPaused] = useState(false);
+
   const phaseRef = useRef<Phase>("idle");
   const intervalRef = useRef<number | null>(null);
 
+  // 休憩を開始したタイミング（manualの「次へで強制終了」用）
+  const restStartedAtRef = useRef<number | null>(null);
+
   useEffect(() => {
     phaseRef.current = phase;
+
+    // restに入ったら開始時刻を持つ、restを抜けたらクリア
+    if (phase === "rest") {
+      if (restStartedAtRef.current == null) restStartedAtRef.current = Date.now();
+    } else {
+      restStartedAtRef.current = null;
+    }
   }, [phase]);
 
   useEffect(() => {
@@ -57,6 +69,8 @@ export default function TimerPage() {
   }, [startedAt]);
 
   const isInterval = useMemo(() => preset?.work_mode === "timed", [preset]);
+  const isManual = useMemo(() => preset?.work_mode === "manual", [preset]);
+
   const workSec = useMemo(() => preset?.work_seconds ?? 0, [preset]);
   const restSec = useMemo(() => preset?.rest_seconds ?? 0, [preset]);
 
@@ -106,9 +120,11 @@ export default function TimerPage() {
     if (!preset) return;
 
     beep();
+    setPaused(false);
 
     const current = phaseRef.current;
 
+    // interval: work -> rest
     if (current === "work") {
       setTotalWork((v) => v + workSec);
       setPhase("rest");
@@ -118,19 +134,24 @@ export default function TimerPage() {
       return;
     }
 
+    // rest finished
     if (current === "rest") {
+      // restが自然終了した場合は「満額」加算
       setTotalRest((v) => v + restSec);
-      setSets((v) => v + 1);
 
       if (isInterval) {
+        setSets((v) => v + 1);
         setPhase("work");
         setRemain(workSec);
         startTick();
         announcePhaseStart("work");
       } else {
+        // manual: rest ends -> idle (set+1)
+        setSets((v) => v + 1);
         setPhase("idle");
         setRemain(0);
         stopTick();
+        setMsg("休憩終了");
       }
       return;
     }
@@ -163,31 +184,9 @@ export default function TimerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetId]);
 
-  const startRun = () => {
-    if (!preset) return;
+  const running = startedAt !== null;
 
-    const now = new Date();
-    setStartedAt(now);
-    startedAtRef.current = now;
-
-    setSets(0);
-    setTotalRest(0);
-    setTotalWork(0);
-
-    if (isInterval) {
-      setPhase("work");
-      setRemain(workSec);
-      startTick();
-      setMsg("開始しました");
-    } else {
-      setPhase("idle");
-      setRemain(0);
-      stopTick();
-      setMsg("開始しました（セットが終わったら「休憩スタート」）");
-    }
-  };
-
-  const resetRun = () => {
+  const doReset = () => {
     stopTick();
     setStartedAt(null);
     startedAtRef.current = null;
@@ -198,60 +197,120 @@ export default function TimerPage() {
     setTotalRest(0);
     setTotalWork(0);
 
+    setPaused(false);
     setMsg("リセットしました");
   };
 
-  const pause = () => {
-    if (!startedAtRef.current) return;
-    if (!(phaseRef.current === "work" || phaseRef.current === "rest")) return;
-
-    stopTick();
-    setMsg("一時停止しました");
-  };
-
-  const resume = () => {
-    if (!startedAtRef.current) return;
-    if (!(phaseRef.current === "work" || phaseRef.current === "rest")) return;
-
-    startTick();
-    setMsg("再開しました");
-  };
-
-  const startRestManual = () => {
+  const startRun = () => {
     if (!preset) return;
-    if (!startedAtRef.current) {
-      setMsg("先にスタートを押してください。");
+
+    const now = new Date();
+    setStartedAt(now);
+    startedAtRef.current = now;
+
+    setSets(0);
+    setTotalRest(0);
+    setTotalWork(0);
+    setPaused(false);
+
+    if (isInterval) {
+      setPhase("work");
+      setRemain(workSec);
+      startTick();
+      setMsg("開始しました");
       return;
     }
+
+    // manual：スタートしたら休憩を即開始
     setPhase("rest");
     setRemain(restSec);
     startTick();
     announcePhaseStart("rest");
   };
 
-  const skip = () => {
-    if (!startedAtRef.current) return;
+  const resetRun = () => {
+    if (!running) return;
+
+    // manual の idle はタイマー動いてないので、そのままリセットOK
+    if (isManual && phaseRef.current === "idle") {
+      doReset();
+      return;
+    }
+
+    // それ以外は「一時停止してから」
+    if (!paused) {
+      setMsg("一時停止してからリセットしてください");
+      return;
+    }
+    doReset();
+  };
+
+  const pause = () => {
+    if (!running) return;
+    if (!(phaseRef.current === "work" || phaseRef.current === "rest")) return;
+
+    stopTick();
+    setPaused(true);
+    setMsg("一時停止しました");
+  };
+
+  const resume = () => {
+    if (!running) return;
+    if (!paused) return;
+
+    if (phaseRef.current === "work" || phaseRef.current === "rest") {
+      startTick();
+      setPaused(false);
+      setMsg("再開しました");
+    }
+  };
+
+  const next = () => {
+    if (!running) return;
+    if (paused) return;
+
+    if (isManual) {
+      if (phaseRef.current === "rest") {
+        // 休憩を強制終了（経過分だけ加算）
+        stopTick();
+
+        const startedMs = restStartedAtRef.current;
+        const elapsedSec =
+          startedMs == null ? 0 : Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+
+        // remainからの逆算でもいいが、実経過で加算
+        setTotalRest((v) => v + Math.min(elapsedSec, restSec));
+        setSets((v) => v + 1);
+
+        setPhase("idle");
+        setRemain(0);
+        setMsg("休憩終了");
+        return;
+      }
+
+      // idleなら次の休憩を開始
+      setPhase("rest");
+      setRemain(restSec);
+      startTick();
+      announcePhaseStart("rest");
+      return;
+    }
+
+    // interval: 次のフェーズへ（今のフェーズを終了扱い）
     stopTick();
     onPhaseFinished();
   };
 
   const saveAndExit = async () => {
-    if (!userId) {
-      setMsg("ユーザー情報の取得に失敗しました。");
-      return;
-    }
+    if (!userId) return setMsg("ユーザー情報の取得に失敗しました。");
     if (!preset) return;
 
     const st = startedAtRef.current;
-    if (!st) {
-      setMsg("先にスタートを押してください。");
-      return;
-    }
+    if (!st) return setMsg("先にスタートを押してください。");
 
     stopTick();
 
     const ended = new Date();
-
     const { error } = await supabase.from("sessions").insert({
       user_id: userId,
       preset_id: preset.id,
@@ -262,10 +321,7 @@ export default function TimerPage() {
       total_work_seconds: totalWork,
     });
 
-    if (error) {
-      setMsg(`保存に失敗しました: ${error.message}`);
-      return;
-    }
+    if (error) return setMsg(`保存に失敗しました: ${error.message}`);
 
     setMsg("保存しました");
     router.push("/sessions");
@@ -278,7 +334,13 @@ export default function TimerPage() {
     return isInterval ? "待機" : "セット中";
   }, [phase, isInterval, preset]);
 
-  const running = startedAt !== null;
+  const canReset =
+    running && ((isManual && phase === "idle") || paused);
+
+  const resetVariant = canReset ? "danger" : "ghost";
+
+  const pauseDisabled = !running || paused || (isManual && phase === "idle");
+  const nextDisabled = !running || paused;
 
   return (
     <Page>
@@ -307,12 +369,11 @@ export default function TimerPage() {
                 {phase === "work" || phase === "rest" ? fmt(remain) : "--:--"}
               </div>
 
-              {/* ✅ ここが改行の主犯なので、nowrapの塊でwrapさせる */}
               <div
                 style={{
+                  marginTop: 10,
                   fontSize: 12,
                   opacity: 0.9,
-                  marginTop: 10,
                   display: "flex",
                   justifyContent: "center",
                   gap: 10,
@@ -331,35 +392,37 @@ export default function TimerPage() {
               </div>
 
               <div style={{ fontSize: 12, opacity: 0.7, marginTop: 10 }}>
-                {isInterval ? `インターバル：トレ ${workSec}s / 休憩 ${restSec}s` : `休憩のみ：休憩 ${restSec}s（セット無制限）`}
+                {isInterval
+                  ? `インターバル：トレ ${workSec}s / 休憩 ${restSec}s`
+                  : `休憩のみ：休憩 ${restSec}s（セット無制限）`}
               </div>
 
               <div style={{ fontSize: 12, opacity: 0.65, marginTop: 10 }}>
-                状態: {running ? "計測中" : "未開始"}
+                状態: {running ? (paused ? "一時停止中" : "計測中") : "未開始"}
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
-              <Button onClick={running ? resetRun : startRun}>{running ? "リセット" : "スタート"}</Button>
-              <Button variant="ghost" onClick={pause} disabled={!running}>
+              {!running ? (
+                <Button onClick={startRun}>スタート</Button>
+              ) : (
+                <Button variant={resetVariant as any} onClick={resetRun} disabled={!canReset}>
+                  リセット
+                </Button>
+              )}
+
+              <Button variant="ghost" onClick={pause} disabled={pauseDisabled}>
                 一時停止
               </Button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
-              <Button variant="ghost" onClick={resume} disabled={!running}>
+              <Button variant="ghost" onClick={resume} disabled={!running || !paused}>
                 再開
               </Button>
-
-              {preset.work_mode === "manual" ? (
-                <Button onClick={startRestManual} disabled={!running}>
-                  休憩スタート
-                </Button>
-              ) : (
-                <Button variant="ghost" onClick={skip} disabled={!running}>
-                  次へ
-                </Button>
-              )}
+              <Button variant="ghost" onClick={next} disabled={nextDisabled}>
+                次へ
+              </Button>
             </div>
 
             <div style={{ marginTop: 10 }}>
@@ -368,7 +431,6 @@ export default function TimerPage() {
               </Button>
             </div>
 
-            {/* メッセージ領域は常に固定（ズレない） */}
             <div style={{ minHeight: 54, marginTop: 10 }}>
               {msg ? (
                 <>

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
-import { Button, Card, Hr, Input, Label, Msg, Page, Select, Sub, Title } from "../../components/ui/ui";
+import { Button, Card, Hr, Input, Label, Msg, Page, Select } from "../../components/ui/ui";
 import AppHeader from "../../components/ui/AppHeader";
 
 type Preset = {
@@ -53,7 +53,6 @@ export default function PresetsPage() {
   }, []);
 
   const refresh = async () => {
-    setMsg("");
     const { data, error } = await supabase
       .from("presets")
       .select("id,name,work_mode,work_seconds,rest_seconds,created_at")
@@ -67,7 +66,6 @@ export default function PresetsPage() {
   };
 
   const resetForm = () => {
-    setMsg("");
     setName(DEFAULT_NAME);
     setWorkMode(DEFAULT_MODE);
     setWorkSeconds(DEFAULT_WORK);
@@ -82,7 +80,6 @@ export default function PresetsPage() {
 
   const createPreset = async () => {
     if (!userId) return;
-    setMsg("");
 
     const rest = toInt(restSeconds);
     const work = toInt(workSeconds);
@@ -102,12 +99,11 @@ export default function PresetsPage() {
     const { error } = await supabase.from("presets").insert(payload);
     if (error) return setMsg(`作成失敗: ${error.message}`);
 
-    setMsg("作成しました！");
+    setMsg("作成しました");
     await refresh();
   };
 
   const deletePreset = async (id: string) => {
-    setMsg("");
     const { error } = await supabase.from("presets").delete().eq("id", id);
     if (error) return setMsg(`削除失敗: ${error.message}`);
     await refresh();
@@ -122,7 +118,6 @@ export default function PresetsPage() {
           <Msg>読み込み中...</Msg>
         ) : (
           <>
-            {/* --- Create form --- */}
             <div
               style={{
                 padding: 12,
@@ -142,14 +137,7 @@ export default function PresetsPage() {
                 <option value="manual">休憩のみ（セット無制限）</option>
               </Select>
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: 10,
-                  gridTemplateColumns: isInterval ? "1fr 1fr" : "1fr",
-                  marginTop: 10,
-                }}
-              >
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: isInterval ? "1fr 1fr" : "1fr", marginTop: 10 }}>
                 {isInterval && (
                   <div>
                     <Label>トレ（秒）</Label>
@@ -175,7 +163,6 @@ export default function PresetsPage() {
                 </div>
               </div>
 
-              {/* ボタンは均等配置：作成 / リセット */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
                 <Button onClick={createPreset}>作成</Button>
                 <Button variant="ghost" onClick={resetForm}>
@@ -183,13 +170,23 @@ export default function PresetsPage() {
                 </Button>
               </div>
 
-              {/* メッセージ（高さズレは許容でOKならそのまま） */}
-              {msg && <Msg>{msg}</Msg>}
+              <div style={{ minHeight: 54, marginTop: 10 }}>
+                {msg ? (
+                  <>
+                    <Hr />
+                    <Msg>{msg}</Msg>
+                  </>
+                ) : (
+                  <div style={{ opacity: 0 }}>
+                    <Hr />
+                    <Msg>placeholder</Msg>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Hr />
 
-            {/* --- List --- */}
             {items.length === 0 ? (
               <Msg>まだプリセットがありません。上で作成してください。</Msg>
             ) : (
@@ -210,12 +207,8 @@ export default function PresetsPage() {
                         background: "rgba(0,0,0,0.18)",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
-                          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{modeText}</div>
-                        </div>
-                      </div>
+                      <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
+                      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{modeText}</div>
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
                         <Button variant="ghost" onClick={() => router.push(`/timer/${p.id}`)}>
